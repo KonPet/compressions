@@ -1,4 +1,4 @@
-[![Codacy Badge](https://app.codacy.com/project/badge/Grade/81d0eaa903e84adb9d477df268f9222f)](https://www.codacy.com/gh/KonPet/compressions/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=KonPet/compressions&amp;utm_campaign=Badge_Grade)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/eb6c3e4145d546e5a8e102e8a2121b36)](https://www.codacy.com/gh/KonPet/compressions/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=KonPet/compressions&amp;utm_campaign=Badge_Grade)
 ![Standard](https://img.shields.io/badge/C%2B%2B-20-blueviolet)
 ![GitHub](https://img.shields.io/github/license/Konpet/compressions)
 # compressions
