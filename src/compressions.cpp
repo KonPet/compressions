@@ -52,7 +52,7 @@ static void getCodes(std::vector<bool>* vecs, std::vector<bool>& bits, Node& n) 
 
 std::vector<u8> huffman(size_t length, u8* data) {
     Node frequencies[256];
-    for (u8 i = 0; i < 255; i++) {
+    for (int i = 0; i < 256; i++) {
         frequencies[i].c = i;
         frequencies[i].count = 0;
     }
@@ -63,11 +63,11 @@ std::vector<u8> huffman(size_t length, u8* data) {
     // add all the leafs into a priority queue so we don't manually have to sort
     auto cmp = [](const std::shared_ptr<Node>& n1, const std::shared_ptr<Node>& n2){ return n1->count > n2->count; };
     std::priority_queue<std::shared_ptr<Node>, std::vector<std::shared_ptr<Node>>, decltype(cmp)> pq;
-    for (u8 i = 0; i < 255; i++) {
-        if (frequencies[i].count) {
+    for (auto & frequency : frequencies) {
+        if (frequency.count) {
             std::shared_ptr<Node> buf = std::make_shared<Node>();
-            buf->c = frequencies[i].c;
-            buf->count = frequencies[i].count;
+            buf->c = frequency.c;
+            buf->count = frequency.count;
             buf->child1 = nullptr;
             buf->child2 = nullptr;
             pq.push(buf);
@@ -91,10 +91,6 @@ std::vector<u8> huffman(size_t length, u8* data) {
 
     // Gets the codes for all chars and puts them in the codes vector. Also puts the entire tree into the bits vector
     getCodes(codes, bits, *root);
-
-    for (auto b : bits) {
-        printf("%i ", (int) b);
-    }
 
     // Write the huffman codes according to the tree
     for (size_t i = 0; i < length; i++) {
@@ -123,8 +119,6 @@ std::vector<u8> huffman(size_t length, u8* data) {
         }
         out.push_back(buffer);
     }
-
-    printf("\n\n");
 
     return out;
 }
@@ -227,7 +221,7 @@ std::vector<u8> LZ77(size_t length, u8* data, u8 offsetBits) {
 
             // Counts number of bytes that we can copy
             u8 counter = 1;
-            while (data[i + counter] == data[pos + counter] && counter < (1 << (16 - offsetBits)) - 1) {
+            while (data[i + counter] == data[pos + counter] && counter < (1 << (16 - offsetBits)) - 1 && pos + counter < length) {
                 counter++;
             }
 
@@ -252,8 +246,6 @@ std::vector<u8> LZ77(size_t length, u8* data, u8 offsetBits) {
         out.push_back(((offBack >> (offsetBits - 8)) & (0xff << (16 - offsetBits))) | maxLen);
         out.push_back(i - 1 < length ? data[i - 1] : 0);
     }
-
-    printf("\n");
 
     return out;
 }
@@ -283,3 +275,100 @@ std::vector<u8> deLZ77(size_t length, u8 *data, u8 offsetBits) {
     return out;
 }
 
+std::vector<u8> LZSS(size_t length, u8* data, u8 offsetBits) {
+    // Used to save possible starting positions
+    std::unordered_set<size_t> startingPositions[256];
+    std::vector<u8> out;
+
+    if (offsetBits == 0 || offsetBits > 15) {
+        return out;
+    }
+
+    for (size_t i = 0; i < length;) {
+        out.push_back(0);
+        size_t bufferIndex = out.size() - 1;
+        for (int j = 0; j < 8; j++) {
+            u16 offBack = 0;
+            u16 maxLen = 0;
+
+            for (auto& pos : startingPositions[data[i]]) {
+                if (i - pos > (1 << offsetBits) - 1) {
+                    // Delete starting positions that are too far away
+                    startingPositions[data[i]].erase(pos);
+                    continue;
+                }
+
+                // Counts number of bytes that we can copy
+                u8 counter = 1;
+                while (data[i + counter] == data[pos + counter] && counter < (1 << (16 - offsetBits)) - 1 && pos + counter < length) {
+                    counter++;
+                }
+
+                if (maxLen <= counter) {
+                    maxLen = counter;
+                    offBack = i - pos;
+                }
+
+                if (maxLen > 1 << (16 - offsetBits)) {
+                    break;
+                }
+            }
+
+            if (maxLen > 2) {
+                for (size_t k = i; k < i + maxLen; k++) {
+                    // Insert all starting positions
+                    startingPositions[data[k]].insert(k);
+                }
+                i += maxLen;
+
+                maxLen -= 3;
+
+                out.push_back(offBack << std::max(8 - offsetBits, 0) | ((maxLen >> 8) & (0xff >> offsetBits)));
+                out.push_back(((offBack >> (offsetBits - 8)) & (0xff << (16 - offsetBits))) | maxLen);
+
+                out[bufferIndex] |= 1 << (7 - j);
+            } else {
+                startingPositions[data[i]].insert(i);
+                out.push_back(i < length ? data[i] : 0);
+                i++;
+            }
+        }
+    }
+
+    return out;
+}
+
+
+std::vector<u8> deLZSS(size_t length, u8 *data, u8 offsetBits) {
+    std::vector<u8> out;
+
+    if (offsetBits == 0 || offsetBits > 15) {
+        return out;
+    }
+
+    for (size_t i = 0; i < length;) {
+        u8& flags = data[i];
+        i++;
+        for (int j = 0; j < 8; j++) {
+            if (flags & (1 << (7 - j))) {
+                u16 offBack = data[i] >> std::max(8 - offsetBits, 0);
+                offBack += (data[i + 1] >> (16 - offsetBits)) << 8;
+                u16 cpyLen = (data[i] & (0xff >> offsetBits)) << 8;
+                cpyLen += (data[i + 1] & (0xff >> std::max(offsetBits - 8, 0))) + 3;
+
+                out.resize(out.size() + cpyLen);
+                for (size_t k = 0; k < cpyLen; k++) {
+                    out[out.size() - cpyLen + k] = out[out.size() - cpyLen - offBack + k];
+                }
+
+                i++;
+            } else {
+                out.push_back(data[i]);
+            }
+
+            i++;
+        }
+    }
+
+    return out;
+}
